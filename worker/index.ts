@@ -12,10 +12,14 @@ import {
   ensureBrowser,
 } from "@remotion/renderer";
 import { db } from "../src/lib/db";
-import { jobs, assets, usageCounters } from "../src/lib/db/schema";
+import { jobs, assets, usageCounters, users } from "../src/lib/db/schema";
 import { uploadBuffer, r2Configured } from "../src/lib/storage/r2";
 import { RENDER_QUEUE, type RenderJobData } from "../src/lib/queue";
 import type { FrasesInput } from "../src/lib/automations/schemas";
+import { getUserPlan } from "../src/lib/subscription";
+import { PLANS } from "../src/lib/payments";
+import { sendJobDoneEmail } from "../src/lib/email";
+import { env } from "../src/lib/env";
 
 const url = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const connection = new IORedis(url, { maxRetriesPerRequest: null });
@@ -60,11 +64,15 @@ async function fail(jobId: string, message: string) {
 
 type JobRow = typeof jobs.$inferSelect;
 
-async function processFrases(row: JobRow) {
+async function processFrases(row: JobRow): Promise<number> {
   const inputs = row.inputs as FrasesInput;
   const list = inputs.frases ?? [];
   const total = list.length;
   if (total === 0) throw new Error("No hay frases para renderizar.");
+
+  // Plan del usuario → marca de agua en el plan Free.
+  const plan = await getUserPlan(row.userId);
+  const watermark = PLANS[plan].watermark;
 
   const serveUrl = await getServeUrl();
   let done = 0;
@@ -76,6 +84,7 @@ async function processFrases(row: JobRow) {
       usuario: inputs.usuario ?? "",
       colorFondo: inputs.colorFondo ?? "0EA5E9",
       colorTexto: inputs.colorTexto ?? "FFFFFF",
+      watermark,
     };
 
     const composition = await selectComposition({
@@ -126,6 +135,7 @@ async function processFrases(row: JobRow) {
   }
 
   await incrementUsage(row.userId, done);
+  return done;
 }
 
 async function handle(job: Job<RenderJobData>) {
@@ -150,20 +160,33 @@ async function handle(job: Job<RenderJobData>) {
     .where(eq(jobs.id, row.id));
 
   try {
+    let count = 0;
     switch (row.automation) {
       case "frases":
-        await processFrases(row);
+        count = await processFrases(row);
         break;
       default:
-        throw new Error(
-          `Automatización aún no disponible: ${row.automation}`,
-        );
+        throw new Error(`Automatización aún no disponible: ${row.automation}`);
     }
     await db
       .update(jobs)
       .set({ status: "done", progress: 100, updatedAt: new Date() })
       .where(eq(jobs.id, row.id));
-    console.log(`[job ${row.id}] completado (${row.automation}).`);
+    console.log(`[job ${row.id}] completado (${row.automation}, ${count} vídeos).`);
+
+    // Aviso por email de que el lote está listo.
+    try {
+      const [u] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, row.userId))
+        .limit(1);
+      if (u?.email) {
+        await sendJobDoneEmail({ to: u.email, count, appUrl: env.appUrl });
+      }
+    } catch (e) {
+      console.error("[job] email aviso:", e);
+    }
   } catch (e) {
     await fail(row.id, e instanceof Error ? e.message : String(e));
   }

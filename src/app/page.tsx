@@ -16,7 +16,10 @@ export default function Home() {
         <div className="text-xl font-extrabold tracking-tight">
           ya<span className="brand-text">video</span>
         </div>
-        <nav className="flex items-center gap-3 text-sm">
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/precios" className="text-white/70 hover:text-white transition">
+            Precios
+          </Link>
           <Link
             href="/login"
             className="px-4 py-2 rounded-full brand-gradient font-semibold hover:opacity-90 transition"

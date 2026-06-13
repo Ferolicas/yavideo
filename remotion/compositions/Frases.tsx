@@ -13,6 +13,7 @@ export type FrasesProps = {
   usuario: string;
   colorFondo: string;
   colorTexto: string;
+  watermark?: boolean;
 };
 
 export const frasesDefaults: FrasesProps = {
@@ -21,6 +22,7 @@ export const frasesDefaults: FrasesProps = {
   usuario: "@tumarca",
   colorFondo: "0EA5E9",
   colorTexto: "FFFFFF",
+  watermark: false,
 };
 
 const toHex = (c: string) => (c.startsWith("#") ? c : `#${c}`);
@@ -40,6 +42,7 @@ export const Frases: React.FC<FrasesProps> = ({
   usuario,
   colorFondo,
   colorTexto,
+  watermark = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -132,6 +135,23 @@ export const Frases: React.FC<FrasesProps> = ({
           ) : null}
         </div>
       </AbsoluteFill>
+
+      {/* Marca de agua (plan Free) */}
+      {watermark ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 60,
+            right: 60,
+            color: fg,
+            opacity: 0.55,
+            fontSize: 30,
+            fontWeight: 700,
+          }}
+        >
+          yavideo.olcas.app
+        </div>
+      ) : null}
     </AbsoluteFill>
   );
 };

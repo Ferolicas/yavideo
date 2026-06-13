@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { getAutomation } from "@/lib/automations/registry";
 import { getSchema } from "@/lib/automations/schemas";
+import { canRender } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,20 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: parsed.error.flatten() },
       { status: 400 },
+    );
+  }
+
+  // Gating por plan: nº de vídeos del lote vs. límite mensual del plan.
+  const data = parsed.data as { frases?: unknown[] };
+  const count = Array.isArray(data.frases) ? data.frases.length : 1;
+  const gate = await canRender(session.user.id, count);
+  if (!gate.allowed) {
+    return NextResponse.json(
+      {
+        error: `Has alcanzado el límite de tu plan ${gate.plan} (${gate.used}/${gate.limit} vídeos este mes). Mejora tu plan para seguir generando.`,
+        code: "limit",
+      },
+      { status: 402 },
     );
   }
 
