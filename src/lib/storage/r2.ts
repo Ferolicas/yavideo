@@ -22,9 +22,12 @@ export function r2Configured(): boolean {
 let _client: S3Client | null = null;
 function client(): S3Client {
   if (_client) return _client;
+  const endpoint =
+    process.env.R2_S3_ENDPOINT ||
+    `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   _client = new S3Client({
     region: "auto",
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    endpoint,
     credentials: {
       accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
